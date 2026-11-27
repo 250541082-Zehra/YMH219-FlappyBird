@@ -65,9 +65,10 @@ Not: Proje Windows Forms kullandığı için yalnızca Windows'ta çalışır.
 
 ## Ekran Görüntüleri
 
-![Oyun ekranı](ekran1.png)
+<img width="487" height="673" alt="ekran2" src="https://github.com/user-attachments/assets/f7b8176a-a674-4451-b43d-4cd9b9ff5bc0" />
 
-![Game Over ekranı](ekran2.png)
+<img width="481" height="677" alt="ekran1" src="https://github.com/user-attachments/assets/f30ed815-6cfa-4c8a-8994-f2471acf23b2" />
+
 
 ## Notlar
 
