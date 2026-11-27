@@ -4,23 +4,7 @@ namespace YMH219_FlappyBird
 {
     public partial class Form1 : Form
     {
-        // Oyun alanının ölçüleri (oyun koordinatları)
-        private const int CanvasWidth = 480;
-        private const int CanvasHeight = 560;
-        private const int GroundHeight = 70;
-        private const int GroundY = CanvasHeight - GroundHeight;   // Zeminin başladığı yer
-        private const float StartY = 250;                          // Kuşun başlangıç yüksekliği
-
-        // Engel ayarları
-        private const int PipeCount = 3;       // Aynı anda dolaşan engel sayısı
-        private const int PipeSpacing = 220;   // İki engel arasındaki yatay mesafe
-        private const int PipeGap = 150;       // Boşluğun yüksekliği
-        private const float PipeSpeed = 3f;    // Engellerin hızı
-
-        private readonly Bird _bird = new Bird(100, StartY);
-        private readonly List<Pipe> _pipes = new List<Pipe>();
-        private readonly Random _random = new Random();
-        private bool _gameOver = false;
+        private readonly Game _game = new Game();
         private bool _flapKeyDown = false;   // SPACE basılı tutulunca sürekli zıplamasın diye
 
         public Form1()
@@ -35,7 +19,8 @@ namespace YMH219_FlappyBird
             KeyDown += Form1_KeyDown;
             KeyUp += Form1_KeyUp;
 
-            CreatePipes();
+            gameTimer.Start();   // Timer hep çalışır, Game sınıfı oyun başlayana kadar bir şey yapmaz
+            UpdateStatusTexts();
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -45,54 +30,9 @@ namespace YMH219_FlappyBird
         // ---------- Oyun döngüsü: timer her 16 ms'de bir çalışır ----------
         private void gameTimer_Tick(object? sender, EventArgs e)
         {
-            _bird.Update();
-
-            // Engelleri sola kaydır
-            foreach (Pipe pipe in _pipes)
-            {
-                pipe.Move(PipeSpeed);
-
-                // Ekrandan tamamen çıktıysa, en sağdaki engelin arkasına yeniden yerleştir
-                if (pipe.Right < 0)
-                {
-                    float farthestX = _pipes.Max(p => p.X);
-                    pipe.Reposition(farthestX + PipeSpacing, RandomGapY(), PipeGap);
-                }
-            }
-
-            // Zemine çarptı mı?
-            if (_bird.Y + Bird.Diameter >= GroundY)
-            {
-                _bird.PlaceOn(GroundY);
-                _gameOver = true;
-                gameTimer.Stop();
-                lblState.Text = "Zemine çarptı - R ile yeniden başla";
-            }
-
+            _game.Update();          // Kuralları Game sınıfı işletir
+            UpdateStatusTexts();     // Skor, seviye, hız yazılarını güncelle
             pbCanvas.Invalidate();   // Ekranı yeniden çiz
-        }
-
-        // ---------- Çizim ----------
-        private void pbCanvas_Paint(object? sender, PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            // Ekran ölçeklemesi (%125 gibi) olsa bile oyun doğru boyutta çizilsin
-            g.ScaleTransform(pbCanvas.Width / (float)CanvasWidth, pbCanvas.Height / (float)CanvasHeight);
-
-            // Borular (zeminin altında kalsın diye önce çiziyoruz)
-            foreach (Pipe pipe in _pipes)
-            {
-                pipe.Draw(g, GroundY);
-            }
-
-            // Zemin
-            g.FillRectangle(Brushes.SandyBrown, 0, GroundY, CanvasWidth, GroundHeight);
-            g.FillRectangle(Brushes.ForestGreen, 0, GroundY, CanvasWidth, 14);
-
-            // Kuş
-            _bird.Draw(g);
         }
 
         // ---------- Klavye ----------
@@ -103,13 +43,13 @@ namespace YMH219_FlappyBird
                 if (!_flapKeyDown)
                 {
                     _flapKeyDown = true;
-                    Flap();
+                    _game.Flap();
                 }
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.R)
             {
-                RestartGame();
+                _game.Restart();
                 e.Handled = true;
             }
         }
@@ -125,52 +65,89 @@ namespace YMH219_FlappyBird
         // ---------- Buton ----------
         private void btnRestart_Click(object? sender, EventArgs e)
         {
-            RestartGame();
+            _game.Restart();
             ActiveControl = null;   // Odağı butondan al, yoksa SPACE butona basmış olur
         }
 
-        // ---------- Yardımcı metotlar ----------
-        private void Flap()
+        // ---------- Üstteki ve alttaki yazılar ----------
+        private void UpdateStatusTexts()
         {
-            if (_gameOver)
+            lblScore.Text = $"Skor: {_game.Score}    En Yüksek: {_game.HighScore}    " +
+                            $"Seviye: {_game.Level}    Hız: {_game.PipeSpeed:0.0}";
+
+            switch (_game.State)
             {
-                return;
-            }
-
-            if (!gameTimer.Enabled)   // İlk SPACE oyunu başlatır
-            {
-                gameTimer.Start();
-                lblState.Text = "Oyun sürüyor";
-            }
-
-            _bird.Flap();
-        }
-
-        private void RestartGame()
-        {
-            _gameOver = false;
-            gameTimer.Stop();
-            _bird.Reset(StartY);
-            CreatePipes();
-            lblState.Text = "Hazır";
-            pbCanvas.Invalidate();
-        }
-
-        /// <summary>Başlangıçta 3 engeli yan yana dizer.</summary>
-        private void CreatePipes()
-        {
-            _pipes.Clear();
-            for (int i = 0; i < PipeCount; i++)
-            {
-                _pipes.Add(new Pipe(CanvasWidth - 100 + i * PipeSpacing, RandomGapY(), PipeGap));
+                case GameState.Ready:
+                    lblState.Text = "Hazır - SPACE'e bas";
+                    break;
+                case GameState.Running:
+                    lblState.Text = "Oyun sürüyor";
+                    break;
+                default:
+                    lblState.Text = "Oyun bitti - R'ye bas";
+                    break;
             }
         }
 
-        /// <summary>Boşluğun üst kenarı için, üstten ve zeminden pay bırakan rastgele bir yükseklik.</summary>
-        private int RandomGapY()
+        // ---------- Çizim ----------
+        private void pbCanvas_Paint(object? sender, PaintEventArgs e)
         {
-            const int margin = 60;
-            return _random.Next(margin, GroundY - PipeGap - margin);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            // Ekran ölçeklemesi (%125 gibi) olsa bile oyun doğru boyutta çizilsin
+            g.ScaleTransform(pbCanvas.Width / (float)Game.Width, pbCanvas.Height / (float)Game.Height);
+
+            // Borular (zeminin altında kalsın diye önce çiziyoruz)
+            foreach (Pipe pipe in _game.Pipes)
+            {
+                pipe.Draw(g, _game.GroundY);
+            }
+
+            // Zemin
+            g.FillRectangle(Brushes.SandyBrown, 0, _game.GroundY, Game.Width, Game.GroundHeight);
+            g.FillRectangle(Brushes.ForestGreen, 0, _game.GroundY, Game.Width, 14);
+
+            // Kuş
+            _game.Bird.Draw(g);
+
+            // Yazılar (başlık, skor, Game Over)
+            DrawOverlay(g);
+        }
+
+        private void DrawOverlay(Graphics g)
+        {
+            using Font big = new Font("Segoe UI", 44f, FontStyle.Bold, GraphicsUnit.Pixel);
+            using Font medium = new Font("Segoe UI", 22f, FontStyle.Bold, GraphicsUnit.Pixel);
+
+            switch (_game.State)
+            {
+                case GameState.Ready:
+                    DrawCenteredText(g, "Flappy Bird", big, 110);
+                    DrawCenteredText(g, "Başlamak için SPACE'e bas", medium, 190);
+                    break;
+
+                case GameState.Running:
+                    DrawCenteredText(g, _game.Score.ToString(), big, 25);
+                    break;
+
+                case GameState.GameOver:
+                    DrawCenteredText(g, "GAME OVER", big, 100);
+                    DrawCenteredText(g, $"Skor: {_game.Score}", medium, 180);
+                    DrawCenteredText(g, $"En Yüksek: {_game.HighScore}", medium, 215);
+                    DrawCenteredText(g, "Yeniden başlamak için R", medium, 260);
+                    break;
+            }
+        }
+
+        /// <summary>Yazıyı yatayda ortalar, okunsun diye siyah gölgeli çizer.</summary>
+        private static void DrawCenteredText(Graphics g, string text, Font font, float y)
+        {
+            using StringFormat format = new StringFormat { Alignment = StringAlignment.Center };
+            RectangleF area = new RectangleF(0, y, Game.Width, font.Height + 10);
+
+            g.DrawString(text, font, Brushes.Black, new RectangleF(area.X + 2, area.Y + 2, area.Width, area.Height), format);
+            g.DrawString(text, font, Brushes.White, area, format);
         }
     }
 }
