@@ -4,8 +4,8 @@ namespace YMH219_FlappyBird
 {
     public partial class Form1 : Form
     {
-        private readonly Game _game = new Game();
-        private bool _flapKeyDown = false;   // SPACE basılı tutulunca sürekli zıplamasın diye
+        // Oyun kuralları Game sınıfında; en yüksek skoru dosyadan okuyarak başlatıyoruz
+        private readonly Game _game = new Game(HighScoreStorage.Load());
 
         public Form1()
         {
@@ -16,8 +16,7 @@ namespace YMH219_FlappyBird
             pbCanvas.Paint += pbCanvas_Paint;
             gameTimer.Tick += gameTimer_Tick;
             btnRestart.Click += btnRestart_Click;
-            KeyDown += Form1_KeyDown;
-            KeyUp += Form1_KeyUp;
+            _game.GameEnded += (s, e) => HighScoreStorage.Save(_game.HighScore);
 
             gameTimer.Start();   // Timer hep çalışır, Game sınıfı oyun başlayana kadar bir şey yapmaz
             UpdateStatusTexts();
@@ -25,6 +24,32 @@ namespace YMH219_FlappyBird
 
         private void Form1_Load(object sender, EventArgs e)
         {
+        }
+
+        // ---------- Klavye ----------
+        // Form'a gelen her tuşu, hangi kontrol seçili olursa olsun, en başta yakalar.
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // Tuş basılı tutulunca Windows aynı tuşu tekrar tekrar gönderir.
+            // LParam'ın 30. biti bu durumda 1 olur; böylece tekrarları yok sayıyoruz.
+            bool isRepeat = (msg.LParam.ToInt64() & 0x40000000) != 0;
+
+            if (keyData == Keys.Space)
+            {
+                if (!isRepeat)
+                {
+                    _game.Flap();
+                }
+                return true;   // Tuşu biz işledik, başka kontrole gitmesin
+            }
+
+            if (keyData == Keys.R)
+            {
+                _game.Restart();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         // ---------- Oyun döngüsü: timer her 16 ms'de bir çalışır ----------
@@ -35,38 +60,11 @@ namespace YMH219_FlappyBird
             pbCanvas.Invalidate();   // Ekranı yeniden çiz
         }
 
-        // ---------- Klavye ----------
-        private void Form1_KeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Space)
-            {
-                if (!_flapKeyDown)
-                {
-                    _flapKeyDown = true;
-                    _game.Flap();
-                }
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.R)
-            {
-                _game.Restart();
-                e.Handled = true;
-            }
-        }
-
-        private void Form1_KeyUp(object? sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Space)
-            {
-                _flapKeyDown = false;
-            }
-        }
-
         // ---------- Buton ----------
         private void btnRestart_Click(object? sender, EventArgs e)
         {
             _game.Restart();
-            ActiveControl = null;   // Odağı butondan al, yoksa SPACE butona basmış olur
+            ActiveControl = null;   // Odağı butondan al
         }
 
         // ---------- Üstteki ve alttaki yazılar ----------
